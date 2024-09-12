@@ -6,7 +6,7 @@ var path = require( 'path' );
 var treeify = require( 'treeify' );
 var fs = require( 'fs' );
 var crypto = require( 'crypto' );
-var child_process = require( 'child_process' );
+//var child_process = require( 'child_process' );
 
 var tree = require( "./tree.js" );
 var colours = require( './colours.js' );
@@ -346,6 +346,7 @@ function activate( context )
             {
                 message += " (" + e.stderr + ")";
             }
+            console.error("Todo-Tree Error: message",e);
             vscode.window.showErrorMessage( "Todo-Tree: " + message );
         } );
     }
@@ -619,6 +620,7 @@ function activate( context )
 
     function resetGitWatcher()
     {
+        /*
         function checkGitHead()
         {
             if( vscode.workspace.workspaceFolders )
@@ -655,6 +657,7 @@ function activate( context )
         {
             debug( 'Automatic Git refresh disabled' );
         }
+        */
     }
 
     function resetPeriodicRefresh()

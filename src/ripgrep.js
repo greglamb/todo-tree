@@ -2,247 +2,100 @@
 /* eslint-env node */
 
 /**
- * This is a modified version of the ripgrep-js module from npm
- * written by alexlafroscia (github.com/alexlafroscia/ripgrep-js)
- * Instead of assuming that ripgrep is in the users path, it uses the
- * ripgrep binary downloaded via vscode-ripgrep.
+ * This is a modified version of ripgrep.js to remove the dependency on ripgrep
+ * and use VSCode's native APIs for searching text.
  */
 
 'use strict';
-const child_process = require( 'child_process' );
-const fs = require( 'fs' );
-const utils = require( './utils' );
+const vscode = require('vscode');
+const utils = require('./utils');
 
-var currentProcess;
-
-function RipgrepError( error, stderr )
-{
+function RipgrepError(error, stderr) {
     this.message = error;
     this.stderr = stderr;
 }
 
-function formatResults( stdout, multiline )
-{
-    stdout = stdout.trim();
-
-    if( !stdout )
-    {
+function formatResults(stdout, multiline) {
+    if (!stdout || stdout.length === 0) {
         return [];
     }
 
-    if( multiline === true )
-    {
-        var results = [];
-        var regex = utils.getRegexForEditorSearch( true );
-        var lines = stdout.split( '\n' );
+    if (multiline === true) {
+        const formattedResults = [];
+        let buffer = [];
+        let matches = [];
+        let text = "";
 
-        var buffer = [];
-        var matches = [];
-        var text = "";
+        for (const result of stdout) {
+            const line = result.preview.text;
+            const resultMatch = new Match(result);
+            buffer.push(line);
+            matches.push(resultMatch);
 
-        lines.map( function( line )
-        {
-            var resultMatch = new Match( line );
-            buffer.push( line );
-            matches.push( resultMatch );
+            text = (text === "") ? resultMatch.match : text + '\n' + resultMatch.match;
+            const fullMatch = text.match(utils.getRegexForEditorSearch(true));
 
-            text = ( text === "" ) ? resultMatch.match : text + '\n' + resultMatch.match;
-
-            var fullMatch = text.match( regex );
-            if( fullMatch )
-            {
-                resultMatch = matches[ 0 ];
+            if (fullMatch) {
+                const firstMatch = matches[0];
                 matches.shift();
-                resultMatch.extraLines = matches;
-                results.push( resultMatch );
+                firstMatch.extraLines = matches;
+                formattedResults.push(firstMatch);
                 buffer = [];
                 matches = [];
                 text = "";
             }
-        } );
-
-        return results;
+        }
+        return formattedResults;
     }
 
-    return stdout
-        .split( '\n' )
-        .map( ( line ) => new Match( line ) );
+    return stdout.map(result => new Match(result));
 }
 
-module.exports.search = function ripGrep( cwd, options )
-{
-    function debug( text )
-    {
-        if( options.outputChannel )
-        {
-            var now = new Date();
-            options.outputChannel.appendLine( now.toLocaleTimeString( 'en', { hour12: false } ) + "." + String( now.getMilliseconds() ).padStart( 3, '0' ) + " " + text );
+module.exports.search = function ripGrep(cwd, options) {
+    function debug(text) {
+        if (options.outputChannel) {
+            const now = new Date();
+            options.outputChannel.appendLine(`${now.toLocaleTimeString('en', { hour12: false })}.${String(now.getMilliseconds()).padStart(3, '0')} ${text}`);
         }
     }
 
-    if( !cwd )
-    {
-        return Promise.reject( { error: 'No `cwd` provided' } );
+    if (!cwd) {
+        return Promise.reject({ error: 'No `cwd` provided' });
     }
 
-    if( arguments.length === 1 )
-    {
-        return Promise.reject( { error: 'No search term provided' } );
+    if (arguments.length === 1) {
+        return Promise.reject({ error: 'No search term provided' });
     }
 
-    options.regex = options.regex || '';
-    options.globs = options.globs || [];
+    const searchOptions = {
+        include: options.globs.length > 0 ? options.globs : undefined,
+        usePCRE2: options.multiline,
+    };
 
-    var rgPath = options.rgPath;
-    var isWin = /^win/.test( process.platform );
+    return new Promise((resolve, reject) => {
+        const results = [];
 
-    if( !fs.existsSync( rgPath ) )
-    {
-        return Promise.reject( { error: "ripgrep executable not found (" + rgPath + ")" } );
-    }
-    if( !fs.existsSync( cwd ) )
-    {
-        return Promise.reject( { error: "root folder not found (" + cwd + ")" } );
-    }
+        // Use options.regex directly, no need to handle pattern files
+        const searchTerm = options.regex;
 
-    if( isWin )
-    {
-        rgPath = '"' + rgPath + '"';
-    }
-    else
-    {
-        rgPath = rgPath.replace( / /g, '\\ ' );
-    }
-
-    let execString = rgPath + ' --no-messages --vimgrep -H --column --line-number --color never ' + options.additional;
-    if( options.multiline )
-    {
-        execString += " -U ";
-    }
-
-    if( options.patternFilePath )
-    {
-        debug( "Writing pattern file:" + options.patternFilePath );
-        fs.writeFileSync( options.patternFilePath, options.unquotedRegex + '\n' );
-    }
-
-    if( !fs.existsSync( options.patternFilePath ) )
-    {
-        debug( "No pattern file found - passing regex in command" );
-        execString = `${execString} -e ${options.regex}`;
-    }
-    else
-    {
-        execString = `${execString} -f \"${options.patternFilePath}\"`;
-        debug( "Pattern:" + options.unquotedRegex );
-    }
-
-    execString = options.globs.reduce( ( command, glob ) =>
-    {
-        return `${command} -g \"${glob}\"`;
-    }, execString );
-
-    if( options.filename )
-    {
-        var filename = options.filename;
-        if( isWin && filename.slice( -1 ) === "\\" )
-        {
-            filename = filename.substr( 0, filename.length - 1 );
-        }
-        execString += " \"" + filename + "\"";
-    }
-    else
-    {
-        execString += " .";
-    }
-
-    debug( "Command: " + execString );
-
-    return new Promise( function( resolve, reject )
-    {
-        // The default for omitting maxBuffer, according to Node docs, is 200kB.
-        // We'll explicitly give that here if a custom value is not provided.
-        // Note that our options value is in KB, so we have to convert to bytes.
-        const maxBuffer = ( options.maxBuffer || 200 ) * 1024;
-        var currentProcess = child_process.exec( execString, { cwd, maxBuffer } );
-        var results = "";
-
-        currentProcess.stdout.on( 'data', function( data )
-        {
-            debug( "Search results:\n" + data );
-            results += data;
-        } );
-
-        currentProcess.stderr.on( 'data', function( data )
-        {
-            debug( "Search failed:\n" + data );
-            if( fs.existsSync( options.patternFilePath ) === true )
-            {
-                fs.unlinkSync( options.patternFilePath );
-            }
-            reject( new RipgrepError( data, "" ) );
-        } );
-
-        currentProcess.on( 'close', function( code )
-        {
-            if( fs.existsSync( options.patternFilePath ) === true )
-            {
-                fs.unlinkSync( options.patternFilePath );
-            }
-            resolve( formatResults( results, options.multiline ) );
-        } );
-
-    } );
+        vscode.workspace.findTextInFiles({ pattern: searchTerm }, searchOptions, result => {
+            results.push(result);
+            debug(`Search result: ${result.preview.text}`);
+        }).then(() => {
+            resolve(formatResults(results, options.multiline));
+        }).catch(error => {
+            debug(`Search failed: ${error.message}`);
+            reject(new RipgrepError(error.message, ""));
+        });
+    });
 };
 
-module.exports.kill = function()
-{
-    if( currentProcess !== undefined )
-    {
-        currentProcess.kill( 'SIGINT' );
-    }
-};
-
-class Match
-{
-    constructor( matchText )
-    {
-        // Detect file, line number and column which is formatted in the
-        // following format: {file}:{line}:{column}:{code match}
-        var regex = RegExp( /^(?<file>.*):(?<line>\d+):(?<column>\d+):(?<todo>.*)/ );
-
-        var match = regex.exec( matchText );
-        if( match && match.groups )
-        {
-            this.fsPath = match.groups.file;
-            this.line = parseInt( match.groups.line );
-            this.column = parseInt( match.groups.column );
-            this.match = match.groups.todo;
-        }
-        else // Fall back to old method
-        {
-            this.fsPath = "";
-
-            if( matchText.length > 1 && matchText[ 1 ] === ':' )
-            {
-                this.fsPath = matchText.substr( 0, 2 );
-                matchText = matchText.substr( 2 );
-            }
-            var parts = matchText.split( ':' );
-            var hasColumn = ( parts.length === 4 );
-            this.fsPath += parts.shift();
-            this.line = parseInt( parts.shift() );
-            if( hasColumn === true )
-            {
-                this.column = parseInt( parts.shift() );
-            }
-            else
-            {
-                this.column = 1;
-            }
-            this.match = parts.join( ':' );
-
-        }
+class Match {
+    constructor(result) {
+        this.fsPath = result.uri.fsPath;
+        this.line = result.range.start.line + 1; // Convert to 1-based indexing
+        this.column = result.range.start.character + 1; // Convert to 1-based indexing
+        this.match = result.preview.text;
     }
 }
 

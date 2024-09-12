@@ -1,5 +1,7 @@
 var vscode = require( 'vscode' );
-var execWithIndices = require( "regexp-match-indices" ).shim();
+
+// https://www.npmjs.com/package/regexp-match-indices has been removed due to https://github.com/Gruntfuggly/todo-tree/issues/853
+//var execWithIndices = require( "regexp-match-indices" ).shim();
 
 var config = require( './config.js' );
 var utils = require( './utils.js' );
@@ -381,4 +383,3 @@ function triggerHighlight( editor )
 module.exports.init = init;
 module.exports.getDecoration = getDecoration;
 module.exports.triggerHighlight = triggerHighlight;
-

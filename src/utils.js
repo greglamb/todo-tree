@@ -318,24 +318,22 @@ function getRegexSource()
     return regex;
 }
 
-function getRegexForEditorSearch( global )
-{
-    var flags = 'm';
-    if( global )
-    {
-        flags += 'g';
+function getRegexForEditorSearch(global) {
+    var flags = 'm'; // multiline flag by default
+    if (global) {
+        flags += 'g'; // global flag
     }
-    if( config.regex().caseSensitive === false )
-    {
-        flags += 'i';
+    if (config.regex().caseSensitive === false) {
+        flags += 'i'; // case-insensitive flag
     }
-    if( config.regex().multiLine === true )
-    {
-        flags += 's';
+    if (config.regex().multiLine === true) {
+        flags += 's'; // dotAll flag to match newlines
     }
 
-    var source = getRegexSource();
-    return RegExp( source, flags );
+    flags += 'd'; // Add the 'd' flag for match indices
+
+    var source = getRegexSource(); // Assume this retrieves the regex pattern as a string
+    return RegExp(source, flags); // Return the regular expression with all the constructed flags
 }
 
 function getRegexForRipGrep()
