@@ -50,6 +50,8 @@ var OK_BUTTON = "OK";
 
 function activate( context )
 {
+    console.log(`Using VS Code API version: ${vscode.version}`);
+
     var outputChannel;
 
     function settingLocation( setting )
@@ -1291,7 +1293,6 @@ function activate( context )
 
         context.subscriptions.push( vscode.commands.registerCommand( 'todo-tree.stopScan', function()
         {
-            ripgrep.kill();
             statusBarIndicator.text = "Todo-Tree: Scanning interrupted.";
             statusBarIndicator.tooltip = "Click to restart";
             statusBarIndicator.command = "todo-tree.refresh";
@@ -1930,7 +1931,6 @@ function activate( context )
 
 function deactivate()
 {
-    ripgrep.kill();
     provider.clear( [] );
 }
 

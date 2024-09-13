@@ -75,10 +75,12 @@ module.exports.search = function ripGrep(cwd, options) {
     return new Promise((resolve, reject) => {
         const results = [];
 
-        // Use options.regex directly, no need to handle pattern files
-        const searchTerm = options.regex;
+        const searchQuery = {
+            pattern: options.regex
+        };
 
-        vscode.workspace.findTextInFiles({ pattern: searchTerm }, searchOptions, result => {
+        // Call findTextInFiles with the correct structure
+        vscode.workspace.findTextInFiles(searchQuery, searchOptions, (result) => {
             results.push(result);
             debug(`Search result: ${result.preview.text}`);
         }).then(() => {
