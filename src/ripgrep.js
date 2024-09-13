@@ -79,13 +79,16 @@ module.exports.search = function ripGrep(cwd, options) {
             pattern: options.regex
         };
 
-        // Call findTextInFiles with the correct structure
+        // Call vscode.workspace.findTextInFiles with the correct structure
         vscode.workspace.findTextInFiles(searchQuery, searchOptions, (result) => {
+            // Push the results as they are streamed
             results.push(result);
             debug(`Search result: ${result.preview.text}`);
         }).then(() => {
+            // When the search completes, resolve with the formatted results
             resolve(formatResults(results, options.multiline));
-        }).catch(error => {
+        }, error => {
+            // Handle any errors here (as findTextInFiles uses error in the then() second parameter)
             debug(`Search failed: ${error.message}`);
             reject(new RipgrepError(error.message, ""));
         });

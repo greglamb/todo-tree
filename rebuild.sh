@@ -11,4 +11,4 @@ code --uninstall-extension greglamb.todo-tree
 
 rm -rf ~/.vscode/extensions/greglamb.todo-tree
 
-code --install-extension $EXT
+#code --install-extension $EXT
